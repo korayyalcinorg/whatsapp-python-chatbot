@@ -1,0 +1,54 @@
+name: Locale Infinite Universe
+
+on:
+  push:
+    branches: [main, ccr-ff93c632-w655ei]
+    paths:
+      - 'locale-infinite-universe/**'
+      - '.github/workflows/locale-universe.yml'
+  pull_request:
+    paths:
+      - 'locale-infinite-universe/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: locale-universe-pages
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: locale-infinite-universe
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: locale-infinite-universe/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: locale-infinite-universe/dist
+
+  deploy:
+    # Requires: Settings → Pages → Source = "GitHub Actions".
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
