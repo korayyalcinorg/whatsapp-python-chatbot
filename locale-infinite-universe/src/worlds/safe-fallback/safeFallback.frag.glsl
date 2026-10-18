@@ -1,4 +1,4 @@
-// Infinite zoom through nested "universes".
+// Safe fallback: infinite zoom through nested ring "universes".
 // LAYERS copies of a ring-shaped universe sit at scales 2^0 .. 2^LAYERS.
 // uZoom slides every layer towards the viewer; a layer fades in while tiny,
 // peaks mid-way and fades out once it is larger than the screen, so the
@@ -13,6 +13,8 @@ uniform float uMid;
 uniform float uHigh;
 uniform float uBeat;
 uniform float uHue;
+uniform vec3 uTintA;
+uniform vec3 uTintB;
 
 varying vec2 vUv;
 
@@ -21,8 +23,8 @@ varying vec2 vUv;
 #define TAU 6.28318530718
 
 vec3 palette(float t) {
-  // Deep blue -> magenta -> amber neon palette (club friendly, no pure white).
-  return 0.5 + 0.5 * cos(TAU * (t + vec3(0.0, 0.33, 0.67)));
+  // Locale emerald <-> beer gold.
+  return mix(uTintA, uTintB, 0.5 + 0.5 * cos(TAU * t));
 }
 
 float hash(vec2 p) {

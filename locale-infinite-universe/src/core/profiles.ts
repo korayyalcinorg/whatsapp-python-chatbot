@@ -1,28 +1,29 @@
+import type { QualityPreset } from './quality';
+import { isQualityPreset } from './quality';
+
 /**
  * Display profiles. The same build runs on a phone (preview), a laptop
- * (rehearsal / VJ control) and the wide LED wall behind the DJ booth; the
- * profile decides how hard we push the GPU and how the HUD behaves.
+ * (rehearsal / DJ control) and the wide LED wall behind the DJ booth.
  */
 export type ProfileId = 'mobile' | 'desktop' | 'led';
 
 export interface DisplayProfile {
   id: ProfileId;
-  /** Upper bound for devicePixelRatio. */
   maxPixelRatio: number;
-  /** Fraction of CSS pixels actually rendered (before pixel ratio). */
-  renderScale: number;
-  antialias: boolean;
-  /** Whether the HUD is visible at start. */
-  showHud: boolean;
-  /** Fixed drawing-buffer size (LED controller's native input), if any. */
+  quality: QualityPreset;
+  /** Whether the embedded control panel is visible at start. */
+  showPanel: boolean;
+  /** Fixed output size (LED controller's native input), if any. */
   fixedSize?: { width: number; height: number };
 }
 
 const PRESETS: Record<ProfileId, DisplayProfile> = {
-  mobile: { id: 'mobile', maxPixelRatio: 1.5, renderScale: 0.75, antialias: false, showHud: true },
-  desktop: { id: 'desktop', maxPixelRatio: 2, renderScale: 1, antialias: true, showHud: true },
-  led: { id: 'led', maxPixelRatio: 1, renderScale: 1, antialias: true, showHud: false },
+  mobile: { id: 'mobile', maxPixelRatio: 1.5, quality: 'low', showPanel: false },
+  desktop: { id: 'desktop', maxPixelRatio: 1.5, quality: 'high', showPanel: false },
+  led: { id: 'led', maxPixelRatio: 1, quality: 'high', showPanel: false },
 };
+
+const LED_SIZE_KEY = 'locale-universe:led-size';
 
 function detectProfile(): ProfileId {
   const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -30,18 +31,37 @@ function detectProfile(): ProfileId {
   return coarse && small ? 'mobile' : 'desktop';
 }
 
-function positiveInt(value: string | null): number | undefined {
+function positiveInt(value: string | null | undefined): number | undefined {
   if (!value) return undefined;
   const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
+  return Number.isFinite(n) && n > 0 && n <= 16384 ? n : undefined;
+}
+
+export function storedLedSize(): { width: number; height: number } | undefined {
+  try {
+    const [w, h] = (localStorage.getItem(LED_SIZE_KEY) ?? '').split('x');
+    const width = positiveInt(w);
+    const height = positiveInt(h);
+    return width && height ? { width, height } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeLedSize(size: { width: number; height: number } | null): void {
+  try {
+    if (size) localStorage.setItem(LED_SIZE_KEY, `${size.width}x${size.height}`);
+    else localStorage.removeItem(LED_SIZE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 /**
- * Resolve the profile from the URL, e.g.
- *   ?profile=led&w=3840&h=1080   LED wall with a fixed native resolution
- *   ?profile=mobile               force phone settings
- *   ?scale=0.5                    override render scale
- *   ?hud=0 / ?hud=1               hide / show HUD at start
+ * Resolve the profile from the URL:
+ *   ?profile=led&w=3840&h=1080   LED wall at a fixed native resolution
+ *   ?quality=low|medium|high|ultra
+ *   ?panel=1                      show the embedded control panel at start
  */
 export function resolveProfile(params: URLSearchParams): DisplayProfile {
   const requested = params.get('profile') as ProfileId | null;
@@ -51,13 +71,10 @@ export function resolveProfile(params: URLSearchParams): DisplayProfile {
   const width = positiveInt(params.get('w'));
   const height = positiveInt(params.get('h'));
   if (width && height) profile.fixedSize = { width, height };
+  else if (id === 'led') profile.fixedSize = storedLedSize();
 
-  const scale = Number.parseFloat(params.get('scale') ?? '');
-  if (Number.isFinite(scale) && scale > 0) profile.renderScale = Math.min(scale, 2);
-
-  const hud = params.get('hud');
-  if (hud === '0') profile.showHud = false;
-  if (hud === '1') profile.showHud = true;
-
+  const quality = params.get('quality');
+  if (isQualityPreset(quality)) profile.quality = quality;
+  if (params.get('panel') === '1') profile.showPanel = true;
   return profile;
 }

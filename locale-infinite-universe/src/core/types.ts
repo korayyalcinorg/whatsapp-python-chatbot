@@ -1,34 +1,14 @@
-import type * as THREE from 'three';
-
-/** Normalised (0..1) audio features shared by every scene. */
+/** Normalised (0..1) audio features shared by every world. */
 export interface AudioFeatures {
   level: number;
   bass: number;
   mid: number;
   high: number;
-  /** 1 on a detected beat, decays towards 0 afterwards. */
+  /** Spectral-flux onset strength, 0..1. */
+  onset: number;
+  /** 1 on a beat, decays to 0. Already passed through the flash guard. */
   beat: number;
+  /** Beat phase 0..1 from the active BPM (manual or estimated). */
+  phase: number;
+  bpm: number;
 }
-
-export interface FrameContext {
-  /** Seconds since start (paused while the tab is hidden). */
-  time: number;
-  /** Seconds since last frame, clamped. */
-  delta: number;
-  audio: AudioFeatures;
-  /** Global speed multiplier controlled from the HUD / keyboard. */
-  speed: number;
-}
-
-/** A visual "universe". Each scene owns its Three.js scene graph and camera. */
-export interface VisualScene {
-  readonly id: string;
-  readonly title: string;
-  readonly scene: THREE.Scene;
-  readonly camera: THREE.Camera;
-  resize(width: number, height: number): void;
-  update(frame: FrameContext): void;
-  dispose(): void;
-}
-
-export type SceneFactory = () => VisualScene;
