@@ -11,6 +11,122 @@ müziğe tepki veren, iç içe evrenler arasında kesintisiz yolculuk yapan ger�
 - Proje geçici olarak `whatsapp-python-chatbot` reposunda. Taşırken `locale-infinite-universe/`,
   bu dosya ve `.github/workflows/locale-universe.yml` birlikte taşınmalı.
 
+## ⚡ Yön değişikliği (2026-10-19): Canlı sistem → 60 sn loop videolar
+
+LED'i bilgisayar/telefondan canlı sürecek bir donanım düzeni yok. Bu yüzden ana çıktı artık
+**her dünya için 60 saniyelik, kesintisiz dönen (seamless loop) video**. Videolar YouTube'a
+yüklenip LED'e bağlı cihazdan oynatılacak (USB ile oynatma yedek yol olarak hazır tutulacak).
+
+Canlı motor çöpe gitmiyor: aynı kod **video render motoru** olarak kullanılıyor. Canlı DJ
+kontrolü, ses analizi ve uzaktan kontrol çalışmaları **askıya alındı**.
+
+### Konsept: her son, aynı videonun başlangıcı
+
+Her videoda kamera dünyanın portalına dalar (kabarcık, bullseye, gül pencere) ve portalın
+içinden **aynı videonun ilk karesi** çıkar. Video bittiğinde aslında başa dönmüş olur; izleyici
+kesmeyi göremez. Bu, *Every Ending Is Another Beginning* fikrinin birebir karşılığı.
+
+```
+0 s ─────────── seyir (≈52 sn) ─────────── portala dalış (≈8 sn) ─► 60 s = 0 s
+                                             portalın içinde: videonun 0. saniyesi
+```
+
+Teknik olarak: aynı tohum (seed) ve varyantla kurulan iki dünya kopyası, sabit adımlı zamanla
+(`simstep`) birebir aynı kareleri üretir. Video, ilk kopyanın geçiş süresi kadar ilerisinden
+başlatılır; böylece 60. saniyedeki kare = 0. saniyedeki kare olur.
+
+### Ölçülen render süreleri (GPU'suz bulut makine, 1920×1080, 30 fps, 1800 kare)
+
+| Dünya | Kare başı | 60 sn video |
+|---|---|---|
+| Bubbleverse | ~4 sn | ~2 saat |
+| Dart Singularity | ~5 sn | ~2.5 saat |
+| Fractal Cathedral | ~8 sn | ~4 saat |
+
+GitHub Actions iş limiti 6 saat → 1080p30 tek işte sığar. 4K / 60 fps için kareler parçalara
+bölünüp paralel işlerde render edilir, sonra birleştirilir. GPU'lu bir bilgisayarda aynı iş dakikalar sürer.
+
+### Video yol haritası
+
+| Faz | Başlık | Durum |
+|---|---|---|
+| V0 | Teknik kararlar (çözünürlük, oynatıcı, fps, ritim) | ⏳ Senden bilgi bekliyor |
+| V1 | Loop modu: deterministik zaman + kendine dönen portal | ⬜ |
+| V2 | Offline renderer: kare yakalama → ffmpeg → MP4 | ⬜ |
+| V3 | GitHub Actions render hattı (telefondan tetikle, linkten indir) | ⬜ |
+| V4 | İlk 3 video: Bubbleverse, Dart Singularity, Fractal Cathedral | ⬜ |
+| V5 | Offline kalite yükseltmesi (süper örnekleme, hareket bulanıklığı) | ⬜ |
+| V6 | YouTube yayını ve LED'de oynatma testi | ⬜ |
+| V7 | Kalan 9 dünyanın videoları | ⬜ |
+
+#### V0 — Teknik kararlar ⏳
+- [ ] **LED çözünürlüğü ve en-boy oranı** (ör. 3840×1080 = 32:9) ve LED'e görüntünün nasıl
+      gittiği (HDMI ile hangi cihaz: Smart TV kutusu, Android box, PC, LED kontrolcünün kendi USB oynatıcısı?).
+- [ ] Oynatma yolu: **YouTube** (internet + reklam riski) mi, **USB/yerel dosya** mı, ikisi birden mi?
+- [ ] fps: **30** (önerilen, render süresi yarı) veya 60.
+- [ ] Ritim: videoda **128 BPM** hafif nabız (60 sn = tam 32 ölçü, house setleriyle uyumlu) veya ritimsiz "sakin" sürüm.
+- Varsayılan (cevap gelene kadar): 1920×1080, 30 fps, 128 BPM nabızlı + nabızsız iki sürüm.
+
+#### V1 — Loop modu ⬜
+- [ ] `?loop=60` modu: dünya 60 sn içinde seyir → portala dalış → kendisine geri dönüş yapar.
+- [ ] Bütün rastgelelik tohumlu (seeded); `Math.random` kullanan yerler (dartboard dokusu dahil) temizlenir.
+- [ ] Ses yerine sabit 128 BPM saat; nabız ölçü başına denk gelir, 60. saniyede faz sıfırlanır.
+- [ ] Logo anı: 60 sn içinde en fazla 1 kez, sabit zamanda (ör. 40. saniye) — tekrar izlenince sürpriz kalır.
+- [ ] **Otomatik loop testi:** 0. kare ile 1800. kare piksel farkı (PSNR) eşiğin üstünde olmalı;
+      geçmezse test kırmızı.
+
+#### V2 — Offline renderer ⬜
+- [ ] `npm run render -- --world bubbleverse --size 1920x1080 --fps 30 --seconds 60`
+- [ ] Playwright ile her kare deterministik çizilir, PNG olarak alınır, ffmpeg'e aktarılır.
+- [ ] Çıktılar: YouTube için H.264 MP4 (yüksek bitrate), LED/USB için ayrıca yüksek kaliteli master,
+      ayrıca kapak görseli (thumbnail).
+- [ ] Kesintisiz uzun sürüm: 60 sn loop ×60 = **1 saatlik video** (yeniden kodlamadan, ffmpeg ile birleştirme).
+      YouTube'un "döngü" özelliği her turda kısa bir duraklama yapabilir; uzun sürüm bunu önler.
+
+#### V3 — GitHub Actions render hattı ⬜ (telefondan yönetim)
+- [ ] Actions → **Render video** → dünya / çözünürlük / fps seç → "Run workflow" (GitHub mobil uygulamasından da).
+- [ ] Her dünya ayrı paralel işte; 4K veya 60 fps'te kareler parçalara bölünür.
+- [ ] Bitmiş videolar bir **GitHub Release**'e eklenir → telefondan tek tıkla indirme linki.
+- [ ] Önizleme: tam render'dan önce 5 sn'lik düşük çözünürlüklü taslak (dakikalar içinde).
+
+#### V4 — İlk 3 video ⬜
+- [ ] Bubbleverse 60 sn (3 varyant: Lager, Burgundy Ale, Emerald Night)
+- [ ] Dart Singularity 60 sn
+- [ ] Fractal Cathedral 60 sn
+- [ ] Bonus: **3 dünyalı yolculuk** (Bubbleverse → Dart → Cathedral → Bubbleverse), 3 dakikalık kesintisiz loop.
+- [ ] Senin onayın: telefonda ve mümkünse LED'de izleyip değerlendirme.
+
+#### V5 — Offline kalite yükseltmesi ⬜
+Gerçek zaman sınırı kalktığı için kalite artırılabilir:
+- [ ] 2× süper örnekleme (tırtıklı kenarlar ve katedraldeki basamaklanma kaybolur)
+- [ ] Hareket bulanıklığı (kare başına birkaç alt-kare ortalaması)
+- [ ] Katedralde daha fazla ışın adımı, yumuşak gölgeler
+- [ ] Vektör/yüksek çözünürlüklü logo (logo analizindeki eksik)
+
+#### V6 — YouTube ve LED oynatma ⬜
+- [ ] Kanal ve **liste dışı (unlisted)** oynatma listesi.
+- [ ] LED 1080p olsa bile **4K yükleme** önerilir: YouTube 4K videolara daha yüksek bit hızı verir, görüntü daha temiz olur.
+- [ ] Reklam riski: YouTube para kazanmayan kanallarda da reklam gösterebilir → barın hesabında
+      **YouTube Premium** veya yerel USB oynatma.
+- [ ] LED en-boy oranı 16:9 değilse YouTube kenarlara siyah bant koyar → video LED kontrolcünün
+      görüntü eşlemesine göre üretilmeli (V0'daki bilgiye bağlı).
+- [ ] Videolarda müzik yok → telif (Content ID) sorunu yok.
+- [ ] Gerçek LED'de test: parlaklık, renk, flaş güvenliği, döngü noktası.
+
+#### V7 — Kalan 9 dünya ⬜
+Eight Ball Universe · Impossible Locale · Eye of Infinity · Mirror Paradox · Stadium Beyond ·
+Liquid Multiverse · Time Machine · Island Within · Locale Origin — her biri 60 sn loop video olarak.
+Gerektiğinde hibrit üretim: fotogerçekçi sahneler için yapay zekâ video araçlarıyla üretilen
+klipler bu motorun portal geçişleriyle birleştirilebilir.
+
+### Askıya alınan işler
+Canlı DJ paneli, gerçek zamanlı ses tepkisi, BPM tahmini, telefondan uzaktan kontrol, Web MIDI,
+LED PC kiosk kurulumu. Kod repoda duruyor; ileride canlı sisteme dönülürse kaldığı yerden devam edilir.
+
+---
+
+# Önceki plan: canlı sistem (askıda)
+
 ## Durum özeti
 
 | Faz | Başlık | Durum |
@@ -114,6 +230,11 @@ Döngü: **Bubbleverse → Dart Singularity → Fractal Cathedral → Bubblevers
 - iOS Safari (tam ekran API'si yok; "Ana Ekrana Ekle" gerekebilir).
 
 ## Değişiklik günlüğü
+
+### 2026-10-19 — Video yönüne geçiş
+- Ana çıktı 60 sn seamless loop videolar oldu; video yol haritası (V0–V7) eklendi.
+- Bulut makinede render süreleri ölçüldü (1080p30: dünya başına 2–4 saat).
+- Canlı kontrol / ses tepkisi işleri askıya alındı.
 
 ### 2026-10-18 — Master Directive: Faz 1 + Faz 2 prototipi
 - Yeni mimari: World modülleri, World Graph, JourneyDirector, portal compositor, DJ paneli,
